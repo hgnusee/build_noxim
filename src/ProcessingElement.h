@@ -32,23 +32,26 @@ SC_MODULE(ProcessingElement)
     sc_in_clk clock;		// The input clock for the PE
     sc_in < bool > reset;	// The reset signal for the PE
 
-    sc_in < Flit > flit_rx;	// The input channel
-    sc_in < bool > req_rx;	// The request associated with the input channel
-    sc_out < bool > ack_rx;	// The outgoing ack signal associated with the input channel
-    sc_out < TBufferFullStatus > buffer_full_status_rx;	
+    sc_in < Flit > flit_rx_pe;	// The input channel
+    sc_in < bool > req_rx_pe;	// The request associated with the input channel
+    sc_out < bool > ack_rx_pe;	// The outgoing ack signal associated with the input channel
+    sc_out < TBufferFullStatus > buffer_full_status_rx_pe;	
 
-    sc_out < Flit > flit_tx;	// The output channel
-    sc_out < bool > req_tx;	// The request associated with the output channel
-    sc_in < bool > ack_tx;	// The outgoing ack signal associated with the output channel
-    sc_in < TBufferFullStatus > buffer_full_status_tx;
+    sc_out < Flit > flit_tx_pe;	// The output channel
+    sc_out < bool > req_tx_pe;	// The request associated with the output channel
+    sc_in < bool > ack_tx_pe;	// The outgoing ack signal associated with the output channel
+    sc_in < TBufferFullStatus > buffer_full_status_tx_pe;
 
     // HG: This is commented out in DNN-Noxim
     sc_in < int >free_slots_neighbor;
 
     // Registers
     int local_id;		// Unique identification number
-    bool current_level_rx;	// Current level for Alternating Bit Protocol (ABP)
-    bool current_level_tx;	// Current level for Alternating Bit Protocol (ABP)
+    bool current_level_rx_pe;	// Current level for Alternating Bit Protocol (ABP)
+    bool current_level_tx_pe;	// Current level for Alternating Bit Protocol (ABP)
+
+    PeBufferBank pebuffer // HG: buffer[direction][vc_id] ###### Wed Feb 5 23:39:15 SGT 2025
+
     queue < Packet > packet_queue;	// Local queue of packets
     bool transmittedAtPreviousCycle;	// Used for distributions with memory
 
@@ -75,14 +78,14 @@ SC_MODULE(ProcessingElement)
     int cycle_cnt;
     
     // [Phase #1] input, weight, psums will be added in future iteration
-    /*     
-        int input_buffer_addr;
-        int weight_buffer_addr;
-        int psum_buffer_addr;
-        sc_uint<32> input_buffer[INPUT_BUFFER * INPUT_BUFFER];
-        sc_uint<32> weight_buffer[WEIGHT_BUFFER * WEIGHT_BUFFER];
-        sc_uint<32> psum_buffer[8 * 8];
-    */
+    // HG: enabled for now, but not expect to be used in phase #1
+    int input_buffer_addr;
+    int weight_buffer_addr;
+    int psum_buffer_addr;
+    sc_uint<32> input_buffer[INPUT_BUFFER * INPUT_BUFFER];
+    sc_uint<32> weight_buffer[WEIGHT_BUFFER * WEIGHT_BUFFER];
+    sc_uint<32> psum_buffer[8 * 8];
+
 
 // ############################## NN Operations #######################################
 
@@ -115,7 +118,7 @@ SC_MODULE(ProcessingElement)
         sensitive << reset;
         sensitive << clock.pos(); 
     */
-   
+
     // HG: DNN-Noxim Prefers this style instead
     // functionally similar to above as proven here: https://www.edaplayground.com/x/QhXT, https://www.edaplayground.com/x/rVGm
     

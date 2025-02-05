@@ -83,6 +83,7 @@ class Buffer {
 };
 
 typedef Buffer BufferBank[MAX_VIRTUAL_CHANNELS];
+typedef Buffer PeBufferBank;// ###### Wed Feb 5 23:39:35 SGT 2025
 
 
 #endif

@@ -29,6 +29,17 @@ enum FlitType {
     FLIT_TYPE_HEAD, FLIT_TYPE_BODY, FLIT_TYPE_TAIL
 };
 
+// ###### Thu Feb 6 01:17:35 SGT 2025
+// HG: DataType -- Flit type enumeration
+enum DataType
+{
+    INSTRUCTION,
+    INPUT_DATA,
+    WEIGHT_DATA,
+    OUTPUT_DATA
+};
+
+
 // Payload -- Payload definition
 struct Payload {
     sc_uint<32> data;	// Bus for the data to be exchanged
@@ -139,6 +150,8 @@ struct Flit {
     bool use_low_voltage_path;
 
     int hub_relay_node;
+    // ###### Thu Feb 6 01:16:42 SGT 2025
+    int data_type; // HG: flit-data type identifier INSTRUCTION, INPUT_DATA, WEIGHT_DATA, OUTPUT_DATA
 
     inline bool operator ==(const Flit & flit) const {
 	return (flit.src_id == src_id && flit.dst_id == dst_id

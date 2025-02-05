@@ -9,15 +9,100 @@
  */
 
 #include "ProcessingElement.h"
-
-int ProcessingElement::randInt(int min, int max)
+// ###### Wed Feb 5 22:09:29 SGT 2025
+// HG: encapsulate rxProcess and txProcess (so that they happen simultaneously)
+void ProcessingElement::process()
 {
-    return min +
-	(int) ((double) (max - min + 1) * rand() / (RAND_MAX + 1.0));
+    txProcess();
+    // computeProcess();
+    rxProcess();
 }
 
 void ProcessingElement::rxProcess()
 {
+    if (reset.read())
+    {
+        ack_rx_pe.write(0);
+        current_level_rx_pe = 0;
+
+        OP = -1;  // HG: -1 ==> NO Operation
+        O_H = 0;
+        O_W = 0;
+        O_C = 0;
+        layer_no = 0; // TODO: Is this necessary?
+        output_buffer_addr = 0;
+        tranmitted_flit = 0;
+        state = LOAD;
+        compute_state = 0;
+        cycle_cnt = 0;
+    } else 
+    {
+        if (state == LOAD)
+        {
+            if (req_rx_pe.read() == 1 - current_level_rx_pe)
+            {
+                Flit flit_tmp = flit_rx_pe.read();
+
+                // HG: Based on the received flits, decide what to do with them
+                // TODO: Decide how to process the received flits...
+                if (flit_tmp.data_type == INSTRUCTION && flit_tmp.flit_type != FLIT_TYPE_HEAD)
+                {
+                    // Initialize the PE when first receiving 'instructions'
+                    OP = flit_tmp.op_type;
+                    layer_no = flit_tmp.layer_no;
+
+                    output_buffer_addr = 0;
+                    tranmitted_flit = 0;
+                    cout << "Instruction" << endl;
+
+                    // [Phase #1] Compute the OFM size based on IFM in the future
+                }
+                else if (flit_tmp.data_type == INPUT_DATA && flit_tmp.flit_type != FLIT_TYPE_HEAD)
+                {
+                    // Increment no of flits received and store it 
+                    input_buffer[input_buffer_addr] = flit_tmp.payload.data;
+                    input_buffer_addr++;
+                    cout << "INPUT_DATA" << endl;
+                }
+
+                // TODO: Read the OP type, and update state to BUSY [DNN-Noxim]
+
+                // std::cout << " PE: => "
+                //           << "Flit: " << flit_tmp.payload.data
+                //           << " Local id : " << local_id << endl;
+                // TODO: Update ABP current level at LOAD state only
+                current_level_rx_pe = 1 - current_level_rx_pe; // Negate the old value for Alternating Bit Protocol (ABP)
+                ack_rx_pe.write(current_level_rx_pe);
+            }
+        }
+        else if (state == BUSY)
+        {
+            computeProcess();
+        }
+        else if (state == WB)
+        {
+            writeBack();
+            state = LOAD;
+
+            I_H = 0;
+            I_W = 0;
+            K_H = 0;
+            K_W = 0;
+            S = 0;
+            OP = -1;
+            O_H = 0;
+            O_W = 0;
+            WB_DST = -1;
+            input_buffer_addr = 0;
+            weight_buffer_addr = 0;
+            psum_buffer_addr = 0;
+            output_buffer_addr = 0;
+        }
+    }
+
+
+    // Original RxProcess Code, used as concept to adapt NN Traffic
+/* 
     if (reset.read()) {
 	ack_rx.write(0);
 	current_level_rx = 0;
@@ -28,10 +113,14 @@ void ProcessingElement::rxProcess()
 	}
 	ack_rx.write(current_level_rx);
     }
+     */
 }
 
 void ProcessingElement::txProcess()
-{
+{   
+
+    // TODO: Figure out why DNN-Noxim PE txProcess() seems to be non-functional? 
+
     if (reset.read()) {
 	req_tx.write(0);
 	current_level_tx = 0;
@@ -166,329 +255,3 @@ bool ProcessingElement::canShot(Packet & packet)
 
     return shot;
 }
-
-
-Packet ProcessingElement::trafficLocal()
-{
-    Packet p;
-    p.src_id = local_id;
-    double rnd = rand() / (double) RAND_MAX;
-
-    vector<int> dst_set;
-
-    int max_id = (GlobalParams::mesh_dim_x * GlobalParams::mesh_dim_y);
-
-    for (int i=0;i<max_id;i++)
-    {
-	if (rnd<=GlobalParams::locality)
-	{
-	    if (local_id!=i && sameRadioHub(local_id,i))
-		dst_set.push_back(i);
-	}
-	else
-	    if (!sameRadioHub(local_id,i))
-		dst_set.push_back(i);
-    }
-
-
-    int i_rnd = rand()%dst_set.size();
-
-    p.dst_id = dst_set[i_rnd];
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-    
-    return p;
-}
-
-
-int ProcessingElement::findRandomDestination(int id, int hops)
-{
-    assert(GlobalParams::topology == TOPOLOGY_MESH);
-
-    int inc_y = rand()%2?-1:1;
-    int inc_x = rand()%2?-1:1;
-    
-    Coord current =  id2Coord(id);
-    
-
-
-    for (int h = 0; h<hops; h++)
-    {
-
-	if (current.x==0)
-	    if (inc_x<0) inc_x=0;
-
-	if (current.x== GlobalParams::mesh_dim_x-1)
-	    if (inc_x>0) inc_x=0;
-
-	if (current.y==0)
-	    if (inc_y<0) inc_y=0;
-
-	if (current.y==GlobalParams::mesh_dim_y-1)
-	    if (inc_y>0) inc_y=0;
-
-	if (rand()%2)
-	    current.x +=inc_x;
-	else
-	    current.y +=inc_y;
-    }
-    return coord2Id(current);
-}
-
-
-int roulette()
-{
-    int slices = GlobalParams::mesh_dim_x + GlobalParams::mesh_dim_y -2;
-
-
-    double r = rand()/(double)RAND_MAX;
-
-
-    for (int i=1;i<=slices;i++)
-    {
-	if (r< (1-1/double(2<<i)))
-	{
-	    return i;
-	}
-    }
-    assert(false);
-    return 1;
-}
-
-
-Packet ProcessingElement::trafficULocal()
-{
-    Packet p;
-    p.src_id = local_id;
-
-    int target_hops = roulette();
-
-    p.dst_id = findRandomDestination(local_id,target_hops);
-
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-
-    return p;
-}
-
-Packet ProcessingElement::trafficRandom()
-{
-    Packet p;
-    p.src_id = local_id;
-    double rnd = rand() / (double) RAND_MAX;
-    double range_start = 0.0;
-    int max_id;
-
-    if (GlobalParams::topology == TOPOLOGY_MESH)
-	max_id = (GlobalParams::mesh_dim_x * GlobalParams::mesh_dim_y) - 1; //Mesh 
-    else    // other delta topologies
-	max_id = GlobalParams::n_delta_tiles-1; 
-
-    // Random destination distribution
-    do {
-	p.dst_id = randInt(0, max_id);
-
-	// check for hotspot destination
-	for (size_t i = 0; i < GlobalParams::hotspots.size(); i++) {
-
-	    if (rnd >= range_start && rnd < range_start + GlobalParams::hotspots[i].second) {
-		if (local_id != GlobalParams::hotspots[i].first ) {
-		    p.dst_id = GlobalParams::hotspots[i].first;
-		}
-		break;
-	    } else
-		range_start += GlobalParams::hotspots[i].second;	// try next
-	}
-#ifdef DEADLOCK_AVOIDANCE
-	assert((GlobalParams::topology == TOPOLOGY_MESH));
-	if (p.dst_id%2!=0)
-	{
-	    p.dst_id = (p.dst_id+1)%256;
-	}
-#endif
-
-    } while (p.dst_id == p.src_id);
-
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-
-    return p;
-}
-// TODO: for testing only
-Packet ProcessingElement::trafficTest()
-{
-    Packet p;
-    p.src_id = local_id;
-    p.dst_id = 10;
-
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-
-    return p;
-}
-
-Packet ProcessingElement::trafficTranspose1()
-{
-    assert(GlobalParams::topology == TOPOLOGY_MESH);
-    Packet p;
-    p.src_id = local_id;
-    Coord src, dst;
-
-    // Transpose 1 destination distribution
-    src.x = id2Coord(p.src_id).x;
-    src.y = id2Coord(p.src_id).y;
-    dst.x = GlobalParams::mesh_dim_x - 1 - src.y;
-    dst.y = GlobalParams::mesh_dim_y - 1 - src.x;
-    fixRanges(src, dst);
-    p.dst_id = coord2Id(dst);
-
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-
-    return p;
-}
-
-Packet ProcessingElement::trafficTranspose2()
-{
-    assert(GlobalParams::topology == TOPOLOGY_MESH);
-    Packet p;
-    p.src_id = local_id;
-    Coord src, dst;
-
-    // Transpose 2 destination distribution
-    src.x = id2Coord(p.src_id).x;
-    src.y = id2Coord(p.src_id).y;
-    dst.x = src.y;
-    dst.y = src.x;
-    fixRanges(src, dst);
-    p.dst_id = coord2Id(dst);
-
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-
-    return p;
-}
-
-void ProcessingElement::setBit(int &x, int w, int v)
-{
-    int mask = 1 << w;
-
-    if (v == 1)
-	x = x | mask;
-    else if (v == 0)
-	x = x & ~mask;
-    else
-	assert(false);
-}
-
-int ProcessingElement::getBit(int x, int w)
-{
-    return (x >> w) & 1;
-}
-
-inline double ProcessingElement::log2ceil(double x)
-{
-    return ceil(log(x) / log(2.0));
-}
-
-Packet ProcessingElement::trafficBitReversal()
-{
-
-    int nbits =
-	(int)
-	log2ceil((double)
-		 (GlobalParams::mesh_dim_x *
-		  GlobalParams::mesh_dim_y));
-    int dnode = 0;
-    for (int i = 0; i < nbits; i++)
-	setBit(dnode, i, getBit(local_id, nbits - i - 1));
-
-    Packet p;
-    p.src_id = local_id;
-    p.dst_id = dnode;
-
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-
-    return p;
-}
-
-Packet ProcessingElement::trafficShuffle()
-{
-
-    int nbits =
-	(int)
-	log2ceil((double)
-		 (GlobalParams::mesh_dim_x *
-		  GlobalParams::mesh_dim_y));
-    int dnode = 0;
-    for (int i = 0; i < nbits - 1; i++)
-	setBit(dnode, i + 1, getBit(local_id, i));
-    setBit(dnode, 0, getBit(local_id, nbits - 1));
-
-    Packet p;
-    p.src_id = local_id;
-    p.dst_id = dnode;
-
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-
-    return p;
-}
-
-Packet ProcessingElement::trafficButterfly()
-{
-
-    int nbits = (int) log2ceil((double)
-		 (GlobalParams::mesh_dim_x *
-		  GlobalParams::mesh_dim_y));
-    int dnode = 0;
-    for (int i = 1; i < nbits - 1; i++)
-	setBit(dnode, i, getBit(local_id, i));
-    setBit(dnode, 0, getBit(local_id, nbits - 1));
-    setBit(dnode, nbits - 1, getBit(local_id, 0));
-
-    Packet p;
-    p.src_id = local_id;
-    p.dst_id = dnode;
-
-    p.vc_id = randInt(0,GlobalParams::n_virtual_channels-1);
-    p.timestamp = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-    p.size = p.flit_left = getRandomSize();
-
-    return p;
-}
-
-void ProcessingElement::fixRanges(const Coord src,
-				       Coord & dst)
-{
-    // Fix ranges
-    if (dst.x < 0)
-	dst.x = 0;
-    if (dst.y < 0)
-	dst.y = 0;
-    if (dst.x >= GlobalParams::mesh_dim_x)
-	dst.x = GlobalParams::mesh_dim_x - 1;
-    if (dst.y >= GlobalParams::mesh_dim_y)
-	dst.y = GlobalParams::mesh_dim_y - 1;
-}
-
-int ProcessingElement::getRandomSize()
-{
-    return randInt(GlobalParams::min_packet_size,
-		   GlobalParams::max_packet_size);
-}
-
-unsigned int ProcessingElement::getQueueSize() const
-{
-    return packet_queue.size();
-}
-
