@@ -29,6 +29,36 @@ struct Communication {
   int t_period;		        // Period after which activity starts again
 };
 
+// ###### Wed Feb 5 01:00:05 MYT 2025
+// struct for PE Traffic Table (consider all 7 elements )
+struct Transaction
+{
+  int layer;
+	
+  int src;
+	int dst;
+  
+  int out_h, out_w, out_c;
+  
+  int op_type;
+
+	int src_type;
+	int dst_type;
+  
+	int operation_type;
+	// int data_type;
+	int activation_type;
+
+	ControlInfo ctrl_info; // TODO: create ControlInfo under DataStructs.h [DNN-Noxim]
+
+  // TODO: create vector for ifmap, weight, ofmap under DataStructs.h [DNN-Noxim]
+	vector<int> ifmap;
+	vector<int> weight;
+	vector<int> ofmap;
+
+	int consumed_flag;
+};
+
 class GlobalTrafficTable {
 
   public:
@@ -37,6 +67,28 @@ class GlobalTrafficTable {
 
     // Load traffic table from file. Returns true if ok, false otherwise
     bool load(const char *fname);
+
+    // ###### Wed Feb 5 24:46:11 MYT 2025
+    // HG: Load PE Traffic Table from file.
+    bool loadTransaction(const char *fname);
+    // ###### Wed Feb 5 02:02:28 MYT 2025
+    // HG: Parse PE Traffic Table into Transactions
+    int getTransactionInfo(const int src_type, const int src_id, int dst_type, 
+                            int &dst_id, int &op, int &actt,
+						                ControlInfo &ctrl, vector<int> &ifm, vector<int> &w);
+    //###### Wed Feb 5 20:06:41 SGT 2025
+    // HG: Get PE Traffic-specific for  PE=->Memory Tiles
+    int getPETransactionInfo(const int src_type, const int src_id, int dst_type, int &dst_id, int &op, int &actt,
+							 ControlInfo &ctrl, vector<int> &ifm, vector<int> &w, vector<int> &ofm);
+    // ###### Wed Feb 5 20:24:37 SGT 2025
+    // HG: Parse PE Traffic Table for PE=->Memory Tiles
+    void loadPETransaction(const int src_id, Transaction &pe_trans);
+    // ###### Wed Feb 5 21:06:53 SGT 2025
+    // HG: Initialize PE Traffic Table
+    void initPETransaction();
+    
+
+
 
     // Returns the cumulative pir por along with a vector of pairs. The
     // first component of the pair is the destination. The second
@@ -53,6 +105,10 @@ class GlobalTrafficTable {
   private:
 
      vector < Communication > traffic_table;
+     // Transaction Table to store PE Traffic Table from txt file
+     vector <Transaction> transaction_table;
+     // Transaction Table to store PE=->Memory Traffic Table from txt file
+     vector < vector<Transaction> > pe_transaction_table;
 };
 
 #endif

@@ -1,0 +1,39 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.tcc": "cpp",
+			"bitset": "cpp",
+			"chrono": "cpp",
+			"compare": "cpp",
+			"deque": "cpp",
+			"list": "cpp",
+			"string": "cpp",
+			"vector": "cpp",
+			"memory_resource": "cpp",
+			"optional": "cpp",
+			"functional": "cpp",
+			"memory": "cpp",
+			"fstream": "cpp",
+			"istream": "cpp",
+			"mutex": "cpp",
+			"ostream": "cpp",
+			"ratio": "cpp",
+			"shared_mutex": "cpp",
+			"string_view": "cpp",
+			"thread": "cpp",
+			"regex": "cpp",
+			"tuple": "cpp",
+			"type_traits": "cpp",
+			"typeinfo": "cpp",
+			"variant": "cpp",
+			"*.def": "cpp",
+			"algorithm": "cpp",
+			"cmath": "cpp"
+		}
+	}
+}
