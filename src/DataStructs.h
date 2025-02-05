@@ -37,6 +37,16 @@ struct Payload {
 	return (payload.data == data);
 }};
 
+// ###### Wed Feb 5 22:04:29 SGT 2025
+// HG: Added State for PE usage
+enum State
+{
+    IDLE,
+    LOAD,
+    BUSY,
+    WB
+};
+
 // Packet -- Packet definition
 struct Packet {
     int src_id;
