@@ -10,12 +10,6 @@
 
 #include "Router.h"
 
-
-inline int toggleKthBit(int n, int k)
-{
-	return (n ^ (1 << (k-1)));
-}
-
 void Router::process()
 {
     txProcess();
@@ -27,7 +21,9 @@ void Router::rxProcess()
     if (reset.read()) {
 	TBufferFullStatus bfs;
 	// Clear outputs and indexes of receiving protocol
-	for (int i = 0; i < DIRECTIONS + 2; i++) {
+	// ###### Thu Feb 6 15:46:07 SGT 2025
+	// HG: DIRECTIONS + 1, initially was +2 but WiNoC is not used 
+	for (int i = 0; i < DIRECTIONS + 1; i++) {
 	    ack_rx[i].write(0);
 	    current_level_rx[i] = 0;
 	    buffer_full_status_rx[i].write(bfs);
@@ -40,7 +36,9 @@ void Router::rxProcess()
 	// This process simply sees a flow of incoming flits. All arbitration
 	// and wormhole related issues are addressed in the txProcess()
 	//assert(false);
-	for (int i = 0; i < DIRECTIONS + 2; i++) {
+	// ###### Thu Feb 6 15:46:07 SGT 2025
+	// HG: DIRECTIONS + 1, initially was +2 but WiNoC is not used 
+	for (int i = 0; i < DIRECTIONS + 1; i++) {
 	    // To accept a new flit, the following conditions must match:
 	    // 1) there is an incoming request
 	    // 2) there is a free slot in the input buffer of direction i
@@ -49,7 +47,7 @@ void Router::rxProcess()
 	    if (req_rx[i].read() == 1 - current_level_rx[i])
 	    { 
 		Flit received_flit = flit_rx[i].read();
-		//LOG<<"request opposite to the current_level, reading flit "<<received_flit<<endl;
+		// LOG<<"request opposite to the current_level, reading flit "<<received_flit<<endl;
 
 		int vc = received_flit.vc_id;
 
@@ -84,7 +82,8 @@ void Router::rxProcess()
 	    // updates the mask of VCs to prevent incoming data on full buffers
 	    TBufferFullStatus bfs;
 	    for (int vc=0;vc<GlobalParams::n_virtual_channels;vc++)
-		bfs.mask[vc] = buffer[i][vc].IsFull();
+			bfs.mask[vc] = buffer[i][vc].IsFull();
+
 	    buffer_full_status_rx[i].write(bfs);
 	}
     }
@@ -96,7 +95,9 @@ void Router::txProcess()
   if (reset.read()) 
     {
       // Clear outputs and indexes of transmitting protocol
-      for (int i = 0; i < DIRECTIONS + 2; i++) 
+	// ###### Thu Feb 6 15:46:07 SGT 2025
+	// HG: DIRECTIONS + 1, initially was +2 but WiNoC is not used 
+      for (int i = 0; i < DIRECTIONS + 1; i++) 
 	{
 	  req_tx[i].write(0);
 	  current_level_tx[i] = 0;
@@ -105,9 +106,11 @@ void Router::txProcess()
   else 
     { 
       // 1st phase: Reservation
-      for (int j = 0; j < DIRECTIONS + 2; j++) 
+	// ###### Thu Feb 6 15:46:07 SGT 2025
+	// HG: DIRECTIONS + 1, initially was +2 but WiNoC is not used 
+      for (int j = 0; j < DIRECTIONS + 1; j++) 
 	{
-	  int i = (start_from_port + j) % (DIRECTIONS + 2);
+	  int i = (start_from_port + j) % (DIRECTIONS + 1);
 
 	  for (int k = 0;k < GlobalParams::n_virtual_channels; k++)
 	  {
@@ -132,18 +135,11 @@ void Router::txProcess()
 		      route_data.dst_id = flit.dst_id;
 		      route_data.dir_in = i;
 		      route_data.vc_id = flit.vc_id;
+			  // HG: include dst_type for route data, future use, [Phase #1] ###### Thu Feb 6 16:01:44 SGT 2025
+			  route_data.dst_type = flit.dst_type;
 
 		      // TODO: see PER POSTERI (adaptive routing should not recompute route if already reserved)
 		      int o = route(route_data);
-
-		      // manage special case of target hub not directly connected to destination
-		      if (o>=DIRECTION_HUB_RELAY)
-			  {
-		      	Flit f = buffer[i][vc].Pop();
-		      	f.hub_relay_node = o-DIRECTION_HUB_RELAY;
-		      	buffer[i][vc].Push(f);
-		      	o = DIRECTION_HUB;
-			  }
 
 		      TReservation r;
 		      r.input = i;
@@ -176,12 +172,13 @@ void Router::txProcess()
 	  }
 	    start_from_vc[i] = (start_from_vc[i]+1)%GlobalParams::n_virtual_channels;
 	}
-
-      start_from_port = (start_from_port + 1) % (DIRECTIONS + 2);
+		// ###### Thu Feb 6 15:46:07 SGT 2025
+		// HG: DIRECTIONS + 1, initially was +2 but WiNoC is not used 
+      start_from_port = (start_from_port + 1) % (DIRECTIONS + 1);
 
       // 2nd phase: Forwarding
       //if (local_id==6) LOG<<"*TX*****local_id="<<local_id<<"__ack_tx[0]= "<<ack_tx[0].read()<<endl;
-      for (int i = 0; i < DIRECTIONS + 2; i++) 
+      for (int i = 0; i < DIRECTIONS + 1; i++) 
       { 
 	  vector<pair<int,int> > reservations = reservation_table.getReservations(i);
 	  
@@ -221,8 +218,9 @@ void Router::txProcess()
 		      }
 
 		      /* Power & Stats ------------------------------------------------- */
-		      if (o == DIRECTION_HUB) power.r2hLink();
-		      else
+			  // remove Hub related power calculations
+		    //   if (o == DIRECTION_HUB) power.r2hLink();
+		    //   else
 			  power.r2rLink();
 
 		      power.bufferRouterPop();
@@ -313,7 +311,8 @@ void Router::perCycleUpdate()
 	power.leakageLinkRouter2Hub();
     }
 }
-
+// HG: Function remove as it is not supported for MESH topology ###### Thu Feb 6 15:28:48 SGT 2025
+/* 
 vector<int> Router::nextDeltaHops(RouteData rd) {
 
 	if (GlobalParams::topology == TOPOLOGY_MESH)
@@ -388,10 +387,11 @@ vector<int> Router::nextDeltaHops(RouteData rd) {
 	return next_hops;
 
 }
-
+ */
 vector < int > Router::routingFunction(const RouteData & route_data)
 {
-	if (GlobalParams::use_winoc)
+	// HG: comment-out WiNoc features
+/* 	if (GlobalParams::use_winoc)
 	{
 		// - If the current node C and the destination D are connected to an radiohub, use wireless
 		// - If D is not directly connected to a radio hub, wireless
@@ -444,7 +444,7 @@ vector < int > Router::routingFunction(const RouteData & route_data)
 				}
             }
 		}
-	}
+	} */
 	// TODO: fix all the deprecated verbose mode logs
 	if (GlobalParams::verbose_mode > VERBOSE_OFF)
 		LOG << "Wired routing for dst = " << route_data.dst_id << endl;
@@ -458,6 +458,15 @@ int Router::route(const RouteData & route_data)
 
     if (route_data.dst_id == local_id)
 	return DIRECTION_LOCAL;
+
+/* 	// HG: [Phase #1] For future use, if Memory tiles are placed at last column [aka DIRECTION_EAST]
+	// HG: have to enable dst_type if want to use this 
+
+	if (route_data.dst_id == local_id && route_data.dst_type == 1)
+		return DIRECTION_EAST;
+	else if (route_data.dst_id == local_id && route_data.dst_type == 0)
+		return DIRECTION_LOCAL;
+ */
 
     power.routing();
     vector < int >candidate_channels = routingFunction(route_data);
@@ -525,10 +534,11 @@ void Router::configure(const int _id,
 
     if (grt.isValid())
 	routing_table.configure(grt, _id);
+	// ###### Thu Feb 6 15:46:07 SGT 2025
+	// HG: DIRECTIONS + 1, initially was +2 but WiNoC is not used 
+    reservation_table.setSize(DIRECTIONS+1);
 
-    reservation_table.setSize(DIRECTIONS+2);
-
-    for (int i = 0; i < DIRECTIONS + 2; i++)
+    for (int i = 0; i < DIRECTIONS + 1; i++)
     {
 	for (int vc = 0; vc < GlobalParams::n_virtual_channels; vc++)
 	{
@@ -639,8 +649,8 @@ void Router::ShowBuffersStats(std::ostream & out)
 	    buffer[i][vc].ShowStats(out);
 }
 
-
-bool Router::connectedHubs(int src_hub, int dst_hub) {
+// HG: remove WiNoc Hub-related
+/* bool Router::connectedHubs(int src_hub, int dst_hub) {
     vector<int> &first = GlobalParams::hub_configuration[src_hub].txChannels;
     vector<int> &second = GlobalParams::hub_configuration[dst_hub].rxChannels;
 
@@ -657,4 +667,4 @@ bool Router::connectedHubs(int src_hub, int dst_hub) {
         return false;
     else
         return true;
-}
+} */
