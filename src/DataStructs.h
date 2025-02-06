@@ -152,6 +152,8 @@ struct Flit {
     int hub_relay_node;
     // ###### Thu Feb 6 01:16:42 SGT 2025
     int data_type; // HG: flit-data type identifier INSTRUCTION, INPUT_DATA, WEIGHT_DATA, OUTPUT_DATA
+    int op_type; // HG: operation type of the flit
+    int layer_no; // HGL indicate which layer of NN
 
     inline bool operator ==(const Flit & flit) const {
 	return (flit.src_id == src_id && flit.dst_id == dst_id

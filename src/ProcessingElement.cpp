@@ -77,22 +77,22 @@ void ProcessingElement::rxProcess()
         }
         else if (state == BUSY)
         {
-            computeProcess();
+            // computeProcess();
         }
         else if (state == WB)
         {
-            writeBack();
+            // writeBack();
             state = LOAD;
 
-            I_H = 0;
-            I_W = 0;
-            K_H = 0;
-            K_W = 0;
-            S = 0;
+            // I_H = 0;
+            // I_W = 0;
+            // K_H = 0;
+            // K_W = 0;
+            // S = 0;
             OP = -1;
             O_H = 0;
             O_W = 0;
-            WB_DST = -1;
+            // WB_DST = -1;
             input_buffer_addr = 0;
             weight_buffer_addr = 0;
             psum_buffer_addr = 0;
@@ -118,9 +118,27 @@ void ProcessingElement::rxProcess()
 
 void ProcessingElement::txProcess()
 {   
+        if (reset.read())
+    {
+        req_tx_pe.write(0);
+        current_level_tx_pe = 0;
+        transmittedAtPreviousCycle = false;
 
-    // TODO: Figure out why DNN-Noxim PE txProcess() seems to be non-functional? 
+        i = 0;
+        makeP_state = 0;
+    }
+    else
+    {
 
+        if (ack_tx_pe.read() == current_level_tx_pe)
+        {
+        }
+    }
+
+    // TODO: Figure out why DNN-Noxim PE txProcess() seems to be non-functional? Likely Router took over its role in Tx
+
+// Original Code
+    /* 
     if (reset.read()) {
 	req_tx.write(0);
 	current_level_tx = 0;
@@ -144,8 +162,12 @@ void ProcessingElement::txProcess()
 	    }
 	}
     }
+    */
 }
 
+// ###### Thu Feb 6 11:21:48 SGT 2025
+// HG: Not used in DNN-Noxim, but somehow declared in PE header file?
+/* 
 Flit ProcessingElement::nextFlit()
 {
     Flit flit;
@@ -175,23 +197,28 @@ Flit ProcessingElement::nextFlit()
 
     return flit;
 }
+ */
 
-bool ProcessingElement::canShot(Packet & packet)
+// ###### Thu Feb 6 11:21:48 SGT 2025
+// HG: Not used in DNN-Noxim, but somehow declared in PE header file?
+/* bool ProcessingElement::canShot(Packet & packet)
 {
    // assert(false);
     if(never_transmit) return false;
    
     //if(local_id!=16) return false;
-    /* DEADLOCK TEST 
-	double current_time = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
+    
+    // DEADLOCK TEST 
+	// double current_time = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
 
-	if (current_time >= 4100) 
-	{
-	    //if (current_time==3500)
-	         //cout << name() << " IN CODA " << packet_queue.size() << endl;
-	    return false;
-	}
-	//*/
+	// if (current_time >= 4100) 
+	// {
+	//     //if (current_time==3500)
+	//          //cout << name() << " IN CODA " << packet_queue.size() << endl;
+	//     return false;
+	// }
+	
+    
 
 #ifdef DEADLOCK_AVOIDANCE
     if (local_id%2==0)
@@ -255,3 +282,4 @@ bool ProcessingElement::canShot(Packet & packet)
 
     return shot;
 }
+*/

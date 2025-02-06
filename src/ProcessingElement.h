@@ -100,7 +100,7 @@ SC_MODULE(ProcessingElement)
 
 // ####################################################################################
 
-    GlobalTrafficTable *traffic_table;	// Reference to the Global traffic Table
+    GlobalTrafficTable *transaction_table;	// Reference to the Global traffic Table
     Flit nextFlit();	// Take the next flit of the current packet
     
     // HG: remove PE utilies

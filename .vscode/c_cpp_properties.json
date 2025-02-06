@@ -3,7 +3,8 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/../systemc-2.3.4/src/**"
             ],
             "defines": [],
             "cStandard": "c17",
