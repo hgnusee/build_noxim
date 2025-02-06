@@ -14,13 +14,14 @@
 #include <systemc.h>
 #include "Router.h"
 #include "ProcessingElement.h"
+// HG: Add network interface for future developments [Phase #1]
+// ###### Thu Feb 6 17:59:24 SGT 2025
+#include "NetworkInterface.h"
 using namespace std;
 
 SC_MODULE(Tile)
 {
-    SC_HAS_PROCESS(Tile);
-
-    
+    SC_HAS_PROCESS(Tile);    
 
     // I/O Ports
     sc_in_clk clock;		                // The input clock for the tile
@@ -37,18 +38,6 @@ SC_MODULE(Tile)
     sc_out <bool> req_tx[DIRECTIONS];	        // The requests associated with the output channels
     sc_in <bool> ack_tx[DIRECTIONS];	        // The outgoing ack signals associated with the output channels
     sc_in <TBufferFullStatus> buffer_full_status_tx[DIRECTIONS];
-
-    // hub specific ports
-    sc_in <Flit> hub_flit_rx;	// The input channels
-    sc_in <bool> hub_req_rx;	        // The requests associated with the input channels
-    sc_out <bool> hub_ack_rx;	        // The outgoing ack signals associated with the input channels
-    sc_out <TBufferFullStatus> hub_buffer_full_status_rx;
-
-    sc_out <Flit> hub_flit_tx;	// The output channels
-    sc_out <bool> hub_req_tx;	        // The requests associated with the output channels
-    sc_in <bool> hub_ack_tx;	        // The outgoing ack signals associated with the output channels
-    sc_in <TBufferFullStatus> hub_buffer_full_status_tx;	
-
 
     // NoP related I/O and signals
     sc_out <int> free_slots[DIRECTIONS];
@@ -70,10 +59,25 @@ SC_MODULE(Tile)
     sc_signal <bool> ack_tx_local;
     sc_signal <TBufferFullStatus> buffer_full_status_tx_local;
 
+   // HG: Signals required for Controller-PE connection
+   // TODO: [Find Out] how does the _pe relate to PE signals?
+    sc_signal <Flit> flit_rx_pe;	
+    sc_signal <bool> req_rx_pe;     
+    sc_signal <bool> ack_rx_pe;
+    sc_signal <TBufferFullStatus> buffer_full_status_rx_pe;
+
+    sc_signal <Flit> flit_tx_pe;
+    sc_signal <bool> req_tx_pe;
+    sc_signal <bool> ack_tx_pe;
+    sc_signal <TBufferFullStatus> buffer_full_status_tx_pe;
+
 
     // Instances
     Router *r;		                // Router instance
     ProcessingElement *pe;	                // Processing Element instance
+	// ###### Thu Feb 6 18:04:43 SGT 2025
+	// HG: Add in for compability in future [Phase #1]
+	NetworkInterface *ni;	                // Network Interface instance
 
     // Constructor
 
@@ -115,18 +119,6 @@ SC_MODULE(Tile)
 	r->buffer_full_status_tx[DIRECTION_LOCAL] (buffer_full_status_rx_local);
 
 
-	// hub related
-	r->flit_rx[DIRECTION_HUB] (hub_flit_rx);
-	r->req_rx[DIRECTION_HUB] (hub_req_rx);
-	r->ack_rx[DIRECTION_HUB] (hub_ack_rx);
-	r->buffer_full_status_rx[DIRECTION_HUB] (hub_buffer_full_status_rx);
-
-	r->flit_tx[DIRECTION_HUB] (hub_flit_tx);
-	r->req_tx[DIRECTION_HUB] (hub_req_tx);
-	r->ack_tx[DIRECTION_HUB] (hub_ack_tx);
-	r->buffer_full_status_tx[DIRECTION_HUB] (hub_buffer_full_status_tx);
-
-
 	// Processing Element pin assignments
 	pe = new ProcessingElement("ProcessingElement");
 	pe->clock(clock);
@@ -142,6 +134,34 @@ SC_MODULE(Tile)
 	pe->req_tx(req_tx_local);
 	pe->ack_tx(ack_tx_local);
 	pe->buffer_full_status_tx(buffer_full_status_tx_local);
+
+	// ###### Thu Feb 6 19:01:42 SGT 2025
+	// HG: PE-Local pin assignments
+	// TODO: Figure out what this pin assignment does?
+	ni = new NetworkInterface("NetworkInterface");
+	ni->clock(clock);
+	ni->reset(reset);
+
+	ni->flit_rx(flit_rx_local);
+	ni->req_rx(req_rx_local);
+	ni->ack_rx(ack_rx_local);
+	ni->buffer_full_status_rx(buffer_full_status_rx_local);
+	
+	ni->flit_tx(flit_tx_local);
+	ni->req_tx(req_tx_local);
+	ni->ack_tx(ack_tx_local);
+	ni->buffer_full_status_tx(buffer_full_status_tx_local);
+
+	// HG: Network Interface to PE connection
+	ni->flit_rx_pe(flit_rx_pe);
+	ni->req_rx_pe(req_rx_pe);
+	ni->ack_rx_pe(ack_rx_pe);
+	ni->buffer_full_status_rx_pe(buffer_full_status_rx_pe);
+	
+	ni->flit_tx_pe(flit_tx_pe);
+	ni->req_tx_pe(req_tx_pe);
+	ni->ack_tx_pe(ack_tx_pe);
+	ni->buffer_full_status_tx_pe(buffer_full_status_tx_local);
 
 	// NoP
 	//
