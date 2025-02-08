@@ -39,6 +39,32 @@ enum DataType
     OUTPUT_DATA
 };
 
+// ###### Sat Feb 8 10:26:55 SGT 2025
+// HG: Add OperationType, ActivationType & ControlInfo
+// Future usage for certain types to be decided [Phase #1]
+enum OperationType
+{
+    CONV2D,
+    FC,
+    POOLING
+};
+
+enum ActivationType
+{
+    RELU
+};
+
+struct ControlInfo
+{
+    int kernel_width;
+    int kernel_height;
+    int stride;
+    int input_width;
+    int input_height;
+    int output_width;
+    int output_height;
+    int wb_dst;
+};
 
 // Payload -- Payload definition
 struct Payload {
@@ -46,7 +72,8 @@ struct Payload {
 
     inline bool operator ==(const Payload & payload) const {
 	return (payload.data == data);
-}};
+    }
+};
 
 // ###### Wed Feb 5 22:04:29 SGT 2025
 // HG: Added State for PE usage
@@ -67,15 +94,18 @@ struct Packet {
     int size;
     int flit_left;		// Number of remaining flits inside the packet
     bool use_low_voltage_path;
+    // HG: Add src_type and dst_type ###### Sat Feb 8 10:28:38 SGT 2025
+    int src_type;
+    int dst_type;
 
     // Constructors
     Packet() { }
 
-    Packet(const int s, const int d, const int vc, const double ts, const int sz) {
-	make(s, d, vc, ts, sz);
+    Packet(const int st, const int s, const int dt, const int d, const int vc, const double ts, const int sz) {
+	make(st, s, dt, d, vc, ts, sz);
     }
 
-    void make(const int s, const int d, const int vc, const double ts, const int sz) {
+    void make(const int st, const int s, const int dt, const int d, const int vc, const double ts, const int sz) {
 	src_id = s;
 	dst_id = d;
 	vc_id = vc;
@@ -83,6 +113,10 @@ struct Packet {
 	size = sz;
 	flit_left = sz;
 	use_low_voltage_path = false;
+    // HG: src_type and dst_type made part of packet creation
+    // ###### Sat Feb 8 10:29:26 SGT 2025 
+    src_type = st;
+    dst_type = dt;
     }
 };
 
@@ -93,8 +127,13 @@ struct RouteData {
     int dst_id;
     int dir_in;			// direction from which the packet comes from
     int vc_id;
+    // HG: src_type and dst_type made part of  route data
+    // ###### Sat Feb 8 10:29:26 SGT 2025 
+    int src_type;
+    int dst_type;
 };
 
+// HG: Possibly not used
 struct ChannelStatus {
     int free_slots;		// occupied buffer slots
     bool available;		// 
@@ -111,13 +150,13 @@ struct NoP_data {
     inline bool operator ==(const NoP_data & nop_data) const {
 	return (sender_id == nop_data.sender_id &&
 		nop_data.channel_status_neighbor[0] ==
-		channel_status_neighbor[0]
+		    channel_status_neighbor[0]
 		&& nop_data.channel_status_neighbor[1] ==
-		channel_status_neighbor[1]
+		    channel_status_neighbor[1]
 		&& nop_data.channel_status_neighbor[2] ==
-		channel_status_neighbor[2]
+	    	channel_status_neighbor[2]
 		&& nop_data.channel_status_neighbor[3] ==
-		channel_status_neighbor[3]);
+	    	channel_status_neighbor[3]);
     };
 };
 
@@ -153,18 +192,38 @@ struct Flit {
     // ###### Thu Feb 6 01:16:42 SGT 2025
     int data_type; // HG: flit-data type identifier INSTRUCTION, INPUT_DATA, WEIGHT_DATA, OUTPUT_DATA
     int op_type; // HG: operation type of the flit
-    int layer_no; // HGL indicate which layer of NN
+    int layer_no; // HG: indicate which layer of NN
+
+    // HG: src_type and dst_type made part of flit creation
+    // ###### Sat Feb 8 10:29:26 SGT 2025 
+    int src_type;
+    int dst_type;
+
+    // HG: add  control info & activation type
+    ControlInfo ctrl_info;
+    int act_type;
 
     inline bool operator ==(const Flit & flit) const {
-	return (flit.src_id == src_id && flit.dst_id == dst_id
+	return (flit.src_type == src_type
+        && flit.src_id == src_id 
+        && flit.dst_type == dst_type
+        && flit.dst_id == dst_id
 		&& flit.flit_type == flit_type
 		&& flit.vc_id == vc_id
 		&& flit.sequence_no == sequence_no
 		&& flit.sequence_length == sequence_length
-		&& flit.payload == payload && flit.timestamp == timestamp
+		&& flit.payload == payload 
+        && flit.timestamp == timestamp
 		&& flit.hop_no == hop_no
 		&& flit.use_low_voltage_path == use_low_voltage_path);
-}};
+    }
+};
+
+// HG: enable data entry into Payload
+struct PayloadData
+{
+    Payload payload; // Optional payload
+};
 
 
 typedef struct 
@@ -179,24 +238,11 @@ enum
     BUFFER_PUSH_PWR_D,
     BUFFER_POP_PWR_D,
     BUFFER_FRONT_PWR_D,
-    BUFFER_TO_TILE_PUSH_PWR_D,
-    BUFFER_TO_TILE_POP_PWR_D,
-    BUFFER_TO_TILE_FRONT_PWR_D,
-    BUFFER_FROM_TILE_PUSH_PWR_D,
-    BUFFER_FROM_TILE_POP_PWR_D,
-    BUFFER_FROM_TILE_FRONT_PWR_D,
-    ANTENNA_BUFFER_PUSH_PWR_D,
-    ANTENNA_BUFFER_POP_PWR_D,
-    ANTENNA_BUFFER_FRONT_PWR_D,
     ROUTING_PWR_D,
     SELECTION_PWR_D,
     CROSSBAR_PWR_D,
     LINK_R2R_PWR_D,
-    LINK_R2H_PWR_D,
     NI_PWR_D,
-    WIRELESS_TX,
-    WIRELESS_DYNAMIC_RX_PWR,
-    WIRELESS_SNOOPING,
     NO_BREAKDOWN_ENTRIES_D
 };
 
@@ -205,10 +251,8 @@ enum
     TRANSCEIVER_RX_PWR_BIASING,
     TRANSCEIVER_TX_PWR_BIASING,
     BUFFER_ROUTER_PWR_S,
-    BUFFER_TO_TILE_PWR_S,
-    BUFFER_FROM_TILE_PWR_S,
-    ANTENNA_BUFFER_PWR_S,
-    LINK_R2H_PWR_S,
+    // BUFFER_TO_TILE_PWR_S,
+    // BUFFER_FROM_TILE_PWR_S,
     ROUTING_PWR_S,
     SELECTION_PWR_S,
     CROSSBAR_PWR_S,

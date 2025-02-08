@@ -216,7 +216,9 @@ unsigned int GlobalStats::getReceivedPackets()
     {
     	for (int y = 0; y < GlobalParams::mesh_dim_y; y++)
 		for (int x = 0; x < GlobalParams::mesh_dim_x; x++)
-	    n += noc->t[x][y]->r->stats.getReceivedPackets();
+	    	n += noc->t[x][y]->r->stats.getReceivedPackets();
+		// HG: considere packets received by Memory Tiles ###### Sat Feb 8 11:05:56 SGT 2025
+		n += noc->mt[x][y]->memni->receivedPackets;
     }
     else // other delta topologies
     {
@@ -235,10 +237,12 @@ unsigned int GlobalStats::getReceivedFlits()
 	for (int y = 0; y < GlobalParams::mesh_dim_y; y++)
 	    for (int x = 0; x < GlobalParams::mesh_dim_x; x++) {
 		n += noc->t[x][y]->r->stats.getReceivedFlits();
-#ifdef TESTING
-		drained_total += noc->t[x][y]->r->local_drained;
-#endif
+		#ifdef TESTING
+				drained_total += noc->t[x][y]->r->local_drained;
+		#endif
 	    }
+		// HG: considere packets received by Memory Tiles ###### Sat Feb 8 11:05:56 SGT 2025
+		n += noc->mt[x][y]->memni->stats.getReceivedFlits();
     }
     else // other delta topologies
     {
@@ -325,25 +329,6 @@ vector < vector < unsigned long > > GlobalStats::getRoutedFlitsMtx()
     return mtx;
 }
 
-unsigned int GlobalStats::getWirelessPackets()
-{
-    unsigned int packets = 0;
-
-    // Wireless noc
-    for (map<int, HubConfig>::iterator it = GlobalParams::hub_configuration.begin();
-            it != GlobalParams::hub_configuration.end();
-            ++it)
-    {
-	int hub_id = it->first;
-
-	map<int,Hub*>::const_iterator i = noc->hub.find(hub_id);
-	Hub * h = i->second;
-
-	packets+= h->wireless_communications_counter;
-    }
-    return packets;
-}
-
 double GlobalStats::getDynamicPower()
 {
     double power = 0.0;
@@ -373,18 +358,6 @@ double GlobalStats::getDynamicPower()
 		power += noc->t[x][y]->r->power.getDynamicPower();
     }
 
-    // Wireless noc
-    for (map<int, HubConfig>::iterator it = GlobalParams::hub_configuration.begin();
-	    it != GlobalParams::hub_configuration.end();
-	    ++it)
-    {
-	int hub_id = it->first;
-
-	map<int,Hub*>::const_iterator i = noc->hub.find(hub_id);
-	Hub * h = i->second;
-
-	power+= h->power.getDynamicPower();
-    }
     return power;
 }
 
@@ -415,18 +388,6 @@ double GlobalStats::getStaticPower()
 	    power += noc->core[y]->r->power.getStaticPower();
     }
 
-    // Wireless noc
-    for (map<int, HubConfig>::iterator it = GlobalParams::hub_configuration.begin();
-            it != GlobalParams::hub_configuration.end();
-            ++it)
-    {
-	int hub_id = it->first;
-
-	map<int,Hub*>::const_iterator i = noc->hub.find(hub_id);
-	Hub * h = i->second;
-
-	power+= h->power.getStaticPower();
-    }
     return power;
 }
 
@@ -469,11 +430,12 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
 	out << "];" << endl;
 
 	showPowerBreakDown(out);
-	showPowerManagerStats(out);
+	// HG: Remove Power Manager, it is for Winoc related
+	// showPowerManagerStats(out);
     }
 
 #ifdef DEBUG
-
+	// HG: commented out by DNN-Noxim, but leave it for debug purposes
     if (GlobalParams::topology == TOPOLOGY_MESH)
     {
 	for (int y = 0; y < GlobalParams::mesh_dim_y; y++)
@@ -490,12 +452,12 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
 	
     out << endl;
 #endif
-
+	cout << "===============================================================" << endl;
     //int total_cycles = GlobalParams::simulation_time - GlobalParams::stats_warm_up_time;
     out << "% Total received packets: " << getReceivedPackets() << endl;
     out << "% Total received flits: " << getReceivedFlits() << endl;
     out << "% Received/Ideal flits Ratio: " << getReceivedIdealFlitRatio() << endl;
-    out << "% Average wireless utilization: " << getWirelessPackets()/(double)getReceivedPackets() << endl;
+    // out << "% Average wireless utilization: " << getWirelessPackets()/(double)getReceivedPackets() << endl;
     out << "% Global average delay (cycles): " << getAverageDelay() << endl;
     out << "% Max delay (cycles): " << getMaxDelay() << endl;
     out << "% Network throughput (flits/cycle): " << getAggregatedThroughput() << endl;
@@ -503,6 +465,22 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
     out << "% Total energy (J): " << getTotalPower() << endl;
     out << "% \tDynamic energy (J): " << getDynamicPower() << endl;
     out << "% \tStatic energy (J): " << getStaticPower() << endl;
+
+	// ###### Sat Feb 8 11:14:12 SGT 2025
+	// HG: Find total latency bsaed on maximum last received flit time in each PE and MemTile
+	unsigned int tmp = 0;
+	for (int y = 0; y < GlobalParams::mesh_dim_y; y++)
+	{
+		for (int x = 0; x < GlobalParams::mesh_dim_x; x++)
+		{
+			if (noc->t[x][y]->ni->last_received_flit_time > tmp)
+				tmp = noc->t[x][y]->ni->last_received_flit_time;
+		}
+		if (noc->mt[y]->memni->last_received_flit_time > tmp)
+			tmp = noc->mt[y]->memni->last_received_flit_time;
+	}
+	cout << "===============================================================" << endl;
+	cout << "% Total latency (cycles) = " << (tmp - GlobalParams::reset_time) << endl;
 
     if (GlobalParams::show_buffer_stats)
       showBufferStats(out);
@@ -515,96 +493,6 @@ void GlobalStats::updatePowerBreakDown(map<string,double> &dst,PowerBreakdown* s
     {
 		dst[src->breakdown[i].label]+=src->breakdown[i].value;
     }
-}
-
-void GlobalStats::showPowerManagerStats(std::ostream & out)
-{
-    std::streamsize p = out.precision();
-    int total_cycles = sc_time_stamp().to_double() / GlobalParams::clock_period_ps - GlobalParams::reset_time;
-
-    out.precision(4);
-
-    out << "powermanager_stats_tx = [" << endl;
-    out << "%\tFraction of: TX Transceiver off (TTXoff), AntennaBufferTX off (ABTXoff) " << endl;
-    out << "%\tHUB\tTTXoff\tABTXoff\t" << endl;
-
-    for (map<int, HubConfig>::iterator it = GlobalParams::hub_configuration.begin();
-            it != GlobalParams::hub_configuration.end();
-            ++it)
-    {
-	int hub_id = it->first;
-
-	map<int,Hub*>::const_iterator i = noc->hub.find(hub_id);
-	Hub * h = i->second;
-
-	out << "\t" << hub_id << "\t" << std::fixed << (double)h->total_ttxoff_cycles/total_cycles << "\t";
-
-	int s = 0;
-	for (map<int,int>::iterator i = h->abtxoff_cycles.begin(); i!=h->abtxoff_cycles.end();i++) s+=i->second;
-
-	out << (double)s/h->abtxoff_cycles.size()/total_cycles << endl;
-    }
-
-    out << "];" << endl;
-
-
-
-    out << "powermanager_stats_rx = [" << endl;
-    out << "%\tFraction of: RX Transceiver off (TRXoff), AntennaBufferRX off (ABRXoff), BufferToTile off (BTToff) " << endl;
-    out << "%\tHUB\tTRXoff\tABRXoff\tBTToff\t" << endl;
-
-
-
-    for (map<int, HubConfig>::iterator it = GlobalParams::hub_configuration.begin();
-            it != GlobalParams::hub_configuration.end();
-            ++it)
-    {
-	string bttoff_str;
-
-	out.precision(4);
-
-	int hub_id = it->first;
-
-	map<int,Hub*>::const_iterator i = noc->hub.find(hub_id);
-	Hub * h = i->second;
-
-	out << "\t" << hub_id << "\t" << std::fixed << (double)h->total_sleep_cycles/total_cycles << "\t";
-
-	int s = 0;
-	for (map<int,int>::iterator i = h->buffer_rx_sleep_cycles.begin();
-		i!=h->buffer_rx_sleep_cycles.end();i++)
-	    s+=i->second;
-
-	out << (double)s/h->buffer_rx_sleep_cycles.size()/total_cycles << "\t";
-
-	s = 0;
-	for (map<int,int>::iterator i = h->buffer_to_tile_poweroff_cycles.begin();
-		i!=h->buffer_to_tile_poweroff_cycles.end();i++)
-	{
-	    double bttoff_fraction = i->second/(double)total_cycles;
-	    s+=i->second;
-	    if (bttoff_fraction<0.25)
-		bttoff_str+=" ";
-	    else if (bttoff_fraction<0.5)
-		    bttoff_str+=".";
-	    else if (bttoff_fraction<0.75)
-		    bttoff_str+="o";
-	    else if (bttoff_fraction<0.90)
-		    bttoff_str+="O";
-	    else 
-		bttoff_str+="0";
-	    
-
-	}
-	out << (double)s/h->buffer_to_tile_poweroff_cycles.size()/total_cycles << "\t" << bttoff_str << endl;
-    }
-
-    out << "];" << endl;
-
-    out.unsetf(std::ios::fixed);
-
-    out.precision(p);
-
 }
 
 void GlobalStats::showPowerBreakDown(std::ostream & out)
@@ -628,22 +516,6 @@ void GlobalStats::showPowerBreakDown(std::ostream & out)
 	    updatePowerBreakDown(power_dynamic, noc->core[y]->r->power.getDynamicPowerBreakDown());
 	    updatePowerBreakDown(power_static, noc->core[y]->r->power.getStaticPowerBreakDown());
 	}
-    }
-
-    for (map<int, HubConfig>::iterator it = GlobalParams::hub_configuration.begin();
-	    it != GlobalParams::hub_configuration.end();
-	    ++it)
-    {
-	int hub_id = it->first;
-
-	map<int,Hub*>::const_iterator i = noc->hub.find(hub_id);
-	Hub * h = i->second;
-
-	updatePowerBreakDown(power_dynamic, 
-		h->power.getDynamicPowerBreakDown());
-
-	updatePowerBreakDown(power_static, 
-		h->power.getStaticPowerBreakDown());
     }
 
     printMap("power_dynamic",power_dynamic,out);
